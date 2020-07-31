@@ -24,6 +24,14 @@ class ParkController extends Controller
         $this->cnx->beginTransaction();
     }
 
+    public function index(){
+        return $this->list();
+    }
+
+    private function list(){
+        return $this->cnx->table('parking')->get();
+    }
+
     public function mginput(){
         $iam = $this->http->input('login');
         $input = $this->http->input('mginput');
@@ -107,29 +115,28 @@ class ParkController extends Controller
         $plateid = $topay['plateid'];
         $tariff = $topay['idtariff'];
         $mservice = $topay['idmainservice'];
-        $ipark = $topay['parkid'];
+        $idpark = $topay['parkid'];
 
-        $opening = $this->currentOpening($iam->rol,$iam->accid);
+        if($this->cnx->table('parking')->where('id',$idpark)->first()){
 
-        if($opening['rset']){
-            $operates = $this->operateSTD($partials,$init,$calc_attime);//sacando el total y cambio
-            if($operates['rest']>=0){
-                $tkt = $this->openTicket($plateid,$opening['rset'],$partials);//crear el ticket y agregar a una caja
-                $createHist=[ "start"=>$init, "ends"=>$calc_attime, "_plate"=>$plateid, "_tariff"=>$tariff, "_mainservice"=>$mservice, "_tkthead"=>$tkt, "pricetime"=>35];
-                $idcopy = $this->addHistory($createHist);//crear registro historico del parking
-                $drop = $this->freeplace($idpark);//liberar el espacio ocupado
-                //eliminar registro de parking
-                //imprimir ticket
-                return response()->json(["calcs"=>$operates,"tkt"=>$tkt,"idcopy"=>$idcopy,"idpark"=>$ipark],200);
-            }else{
-                return response()->json(["error"=>true,"msg"=>"Favor de cubrir el total"],200);
-            }
-        }else{return response()->json(["error"=>true,"msg"=>$opening['msg']],200);}
-
+            $opening = $this->currentOpening($iam->rol,$iam->accid);
+            if($opening['rset']){
+                $operates = $this->operateSTD($partials,$init,$calc_attime);//sacando el total y cambio
+                if($operates['rest']>=0){
+                    $tkt = $this->openTicket($plateid,$opening['rset'],$partials);//crear el ticket y agregar a una caja
+                    $createHist=[ "start"=>$init, "ends"=>$calc_attime, "_plate"=>$plateid, "_tariff"=>$tariff, "_mainservice"=>$mservice, "_tkthead"=>$tkt, "pricetime"=>35];
+                    $idcopy = $this->addHistory($createHist);//crear registro historico del parking
+                    $freeplace = $this->freeplace($idpark);//liberar el espacio ocupado
+                    $this->cnx->commit();
+                    //imprimir ticket
+                    return response()->json(["calcs"=>$operates,"tkt"=>$tkt,"idcopy"=>$idcopy,"freeplace"=>$freeplace],200);
+                }else{ return response()->json(["error"=>true,"msg"=>"Favor de cubrir el total"],200); }
+            }else{ return response()->json(["error"=>true,"msg"=>$opening['msg']],200);}
+        }else{ return response()->json(["error"=>true,"msg"=>"Este id ($idpark), ya fue liberado"],200);}
     }
 
     private function freeplace($idpark){
-
+        return $this->cnx->table('parking')->where('id',$idpark)->delete();
     }
 
     private function addHistory($createHist){

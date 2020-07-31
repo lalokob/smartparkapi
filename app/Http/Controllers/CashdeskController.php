@@ -106,4 +106,12 @@ class CashdeskController extends Controller
                 'updated_at'=>$this->today
             ]);
     }
+
+    public function index(){
+        return $this->list();
+    }
+
+    private function list(){
+        return $this->cnx->table('cashregisters')->get();
+    }
 }

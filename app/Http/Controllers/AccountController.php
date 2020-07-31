@@ -35,6 +35,12 @@ class AccountController extends Controller
         return $crypted;
     }
 
+    private function getModules($rol){
+        return DB::table('rolhasmodules')
+            ->join('modules_system','modules_system.id','=','rolhasmodules._module')
+            ->where('_rol',$rol)->get();
+    }
+
     public function tryLogin(){
         $nick = $this->http->input('nick');
         $pass = $this->http->input('pass');
@@ -52,6 +58,8 @@ class AccountController extends Controller
                         'roles_user.id as rolid'                        
                     )
                     ->where('nick',$nick)->first();
+        
+        $modules = $this->getModules($account->rolid);
 
         if($account){
             if(password_verify($pass, $account->pass)) {
@@ -59,7 +67,7 @@ class AccountController extends Controller
                 $dtcrypt = json_encode([ "accid"=>$account->id,"rol"=>$account->rolid,"ends"=>$this->todayobj->endOfDay() ]);
                 $apikey = $this->genApiKey($dtcrypt);
                 $usdata = collect($account)->except(['pass']);
-                $rset = [ "msg"=>"Welcome!!!","apikey"=>$apikey,"usdata"=>$usdata ];
+                $rset = [ "msg"=>"Welcome!!!","apikey"=>$apikey,"usdata"=>$usdata,"modules"=>$modules ];
             }else{ $rset = ["msg"=>"Credenciales Erroneas","apikey"=>null]; }
         }else{ $rset = ["msg"=>"Credenciales Incorrectas","apikey"=>null]; }
 
