@@ -7,6 +7,7 @@
     "require": {
         "php": "^7.2.5",
         "laravel/lumen-framework": "^7.0",
+        "mike42/escpos-php": "^3.0",
         "nesbot/carbon": "^2.36",
         "tymon/jwt-auth": "^1.0"
     },

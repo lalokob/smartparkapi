@@ -10,7 +10,7 @@
 | and give it the Closure to call when that URI is requested.
 |
 */
-
+use Illuminate\Http\Request;
 $router->group(['prefix'=>'test',], function() use($router){
     $router->get('appcnx',function() use($router){ return $router->app->version(); });
     $router->get('genhashpass',function(){
@@ -27,21 +27,24 @@ $router->group(['prefix'=>'test',], function() use($router){
 
 $router->group(['prefix'=>'account'], function() use($router){
     $router->post('trylogin','AccountController@tryLogin');
+    // $router->post('trylogin',function(Request $req){
+    //     return response()->json($req->all(),200);
+    // });
     $router->group(['middleware'=>'auth'], function() use($router){
         $router->post('create','AccountController@create');
     });
 });
 
 $router->group(['prefix'=>'cashdesk','middleware'=>'auth'], function() use($router){
-    $router->get('index','CashdeskController@index');
+    $router->post('index','CashdeskController@index');
     $router->get('create','CashdeskController@create');
-    $router->get('opening','CashdeskController@opening');
+    $router->post('opening','CashdeskController@opening');
 });
 
 $router->group(['prefix'=>'park','middleware'=>'auth'], function() use($router){
-    $router->get('index','ParkController@index');
-    $router->get('mginput','ParkController@mginput');
+    $router->post('index','ParkController@index');
+    $router->post('mginput','ParkController@mginput');
     $router->post('stdcheckin','ParkController@stdcheckin');
-    $router->post('stdprecheckout','ParkController@stdprecheckout');
+    // $router->post('stdprecheckout','ParkController@stdprecheckout');//quiza deba ser removida
     $router->post('charge','ParkController@charge');
 });

@@ -88,7 +88,7 @@ class CashdeskController extends Controller
 
                     $rset=["msg"=>"opening done!!!","rset"=>["updt"=>$updt,"openid"=>$newid] ];
                 }else{
-                    $rset=["msg"=>"impossible opening!!","rset"=>$cashstate ];
+                    $rset=["msg"=>"impossible opening!!","rset"=>null, "cashstate"=>$cashstate ];
                 }
             } catch (\Exception $e) {
                 $rset=["msg"=>$e->getMessage(),"rset"=>null ];
@@ -108,7 +108,17 @@ class CashdeskController extends Controller
     }
 
     public function index(){
-        return $this->list();
+        $cashdesks = $this->list();
+        $currencies = $this->getcurrencies();
+
+        return [
+            "cashdesks"=>$cashdesks,
+            "currencies"=>$currencies
+        ];
+    }
+
+    public function getcurrencies(){
+        return $this->cnx->table('currency_denoms')->get();
     }
 
     private function list(){

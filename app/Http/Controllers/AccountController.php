@@ -58,12 +58,10 @@ class AccountController extends Controller
                         'roles_user.id as rolid'                        
                     )
                     ->where('nick',$nick)->first();
-        
-        $modules = $this->getModules($account->rolid);
-
+                    
         if($account){
             if(password_verify($pass, $account->pass)) {
-        //         $appmods = $this->modules($idacc);
+                $modules = $this->getModules($account->rolid);
                 $dtcrypt = json_encode([ "accid"=>$account->id,"rol"=>$account->rolid,"ends"=>$this->todayobj->endOfDay() ]);
                 $apikey = $this->genApiKey($dtcrypt);
                 $usdata = collect($account)->except(['pass']);
@@ -72,6 +70,8 @@ class AccountController extends Controller
         }else{ $rset = ["msg"=>"Credenciales Incorrectas","apikey"=>null]; }
 
         return response()->json([ "rset"=>$rset ], 200);
+        // return response()->json([ "rset"=>$this->http->all() ], 200);
+
     }
 
     public function create(){

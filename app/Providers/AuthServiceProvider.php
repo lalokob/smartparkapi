@@ -44,7 +44,6 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->app['auth']->viaRequest('api', function ($request) {
             $apikey = $request->input('apikey');
-            // $accountdt = $request->input('account');
             if($apikey){
                 $dtdecrypt = $this->hashdecrypt($apikey);
                 if($dtdecrypt){

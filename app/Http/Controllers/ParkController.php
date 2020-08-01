@@ -25,11 +25,21 @@ class ParkController extends Controller
     }
 
     public function index(){
-        return $this->list();
+        return ["park"=>$this->list()];
     }
 
     private function list(){
-        return $this->cnx->table('parking')->get();
+        return $this->cnx->table('parking')
+                ->join('plates','plates.id','=','parking._plate')
+                ->select(
+                    'plates.id as plateid',
+                    'plates.plate as plate',
+                    'parking._mainservice as idmnservice',
+                    'parking.init as init',
+                    'parking._tariff as idtariff',
+                    'parking.state as parkstate'
+                )
+                ->get();
     }
 
     public function mginput(){
@@ -52,13 +62,18 @@ class ParkController extends Controller
                         $rset=["msg"=>"Servicio de pension","inpark"=>$itsinpark,"nextaction"=>$nextaction];
                     break;
                     default:
-                        $nextaction = $itsinpark->state==1 ? "preCheckout":"WTF!!!";
-                        $rset=["msg"=>"Servicio de parqueo","inpark"=>$itsinpark,"nextaction"=>$nextaction];
+                        $precheckout = $this->stdprecheckout($exist->plate);
+                        $rset=[
+                            "msg"=>"Servicio de parqueo",
+                            "inpark"=>$itsinpark,
+                            "nextaction"=>"stdCheckOut",
+                            "precheckout"=>$precheckout
+                        ];
                     break;
                 }
                 
             }else{ $rset=["msg"=>"Reingreso!! ","inpark"=>205,"nextaction"=>"takeYourChoice"]; }//registrada previamente, pero no esta en estacionmaiento
-        }else{ $rset=["msg"=>"Sin coincidencias para ".$input,"inpark"=>404,"nextaction"=>"itsYourChoice"]; }//sin registro previo
+        }else{ $rset=["msg"=>"Placa nueva, sin registro previo ".$input,"inpark"=>404,"nextaction"=>"itsYourChoice"]; }//sin registro previo
 
         return response()->json($rset, 200);
         // return response()->json([$exist,$inputmd5,$input], 200);
@@ -67,29 +82,33 @@ class ParkController extends Controller
 
     public function stdcheckin(){
         $iam = $this->http->input('login');
-        $plate = $this->http->input('plate');
+        $plate = strtoupper($this->http->input('plate'));
         $platemd5 = md5($plate);
         $tariff = $this->http->input('tariff');
+        $notes = $this->http->input('notes');
 
-        $platetrycreate = $this->cnx->table('plates')->insertOrIgnore(["plate"=>$plate,"hash"=>$platemd5,"created_at"=>$this->today,"updated_at"=>$this->today,"state"=>1,"vhtype"=>1]);
-        $dtplate = $this->cnx->table('plates')->where("plate",$plate)->first();
-        $apark = $this->cnx->table('parking')->insertGetId(["_plate"=>$dtplate->id,"_mainservice"=>1,"_tariff"=>$tariff,"state"=>1,"init"=>$this->today ]);
-        $dtpark = $this->cnx->table('parking')->where('id',$apark)->first();
+        try {
+            $platetrycreate = $this->cnx->table('plates')->insertOrIgnore(["plate"=>$plate,"hash"=>$platemd5,"created_at"=>$this->today,"updated_at"=>$this->today,"state"=>1,"vhtype"=>1]);
+            $dtplate = $this->cnx->table('plates')->where("plate",$plate)->first();
+            $apark = $this->cnx->table('parking')->insertGetId(["_plate"=>$dtplate->id,"_mainservice"=>1,"_tariff"=>$tariff['value'],"state"=>1,"init"=>$this->today, "notes"=>$notes ]);
+            $dtpark = $this->cnx->table('parking')->where('id',$apark)->first();
+            $this->cnx->commit();
 
-        $this->cnx->commit();
-
-        return response()->json(["dtplate"=>$dtplate,"dtpark"=>$dtpark],200);
+            return response()->json(["dtplate"=>$dtplate,"dtpark"=>$dtpark],200);
+        } catch (\Throwable $e) {
+            return response()->json(["dtpark"=>null,"msg"=>$e->getMessage()],200);
+        }        
     }
 
-    public function stdprecheckout(){
-        $iam = $this->http->input('login');
-        $input = $this->http->input('input');
+    private function stdprecheckout($plate){
+        // $iam = $this->http->input('login');
+        // $input = $this->http->input('input');
 
         //getting data plate
         $dtplate = $this->cnx->table('plates')
             ->join('parking','parking._plate','=','plates.id')
-            ->where('plate',$input)
-            ->orWhere('hash',$input)
+            ->where('plates.plate',$plate)
+            ->orWhere('plates.hash',$plate)
             ->select(
                 'parking.id as parkid',
                 'parking.init as init',
@@ -103,7 +122,7 @@ class ParkController extends Controller
         /** me quede aqui, ya hace el calculo del tiempo de estacionamiento */
         $resumePay = $this->resumePay($dtplate->init,35);
 
-        return response()->json(["dtpark"=>$dtplate,"topay"=>$resumePay],200);
+        return ["dtpark"=>$dtplate,"topay"=>$resumePay];
     }
 
     public function charge(){
