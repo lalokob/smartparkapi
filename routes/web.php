@@ -12,6 +12,7 @@
 */
 use Illuminate\Http\Request;
 $router->group(['prefix'=>'test',], function() use($router){
+    $router->get('miniprinter','ParkController@tesprinter');
     $router->get('appcnx',function() use($router){ return $router->app->version(); });
     $router->get('genhashpass',function(){
         $msg="fail password";
