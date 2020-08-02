@@ -222,7 +222,7 @@ class ParkController extends Controller
             ->first();
         
         /** me quede aqui, ya hace el calculo del tiempo de estacionamiento */
-        $resumePay = $this->resumePay($dtplate->init,35);
+        $resumePay = $this->resumePay($dtplate->init,36);
 
         return ["dtpark"=>$dtplate,"topay"=>$resumePay];
     }
@@ -256,7 +256,7 @@ class ParkController extends Controller
         $printer = new Printer($connector);
 
         $dtpark = $this->dataforemmit($idpark);
-        $resume = $this->resumePay($dtpark->init,35,$dtpark->ends);
+        $resume = $this->resumePay($dtpark->init,36,$dtpark->ends);
 
         try {
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
@@ -339,7 +339,7 @@ class ParkController extends Controller
     }
 
     private function operateSTD($partials,$init,$end){
-        $resumePay = $this->resumePay($init,35,$end);
+        $resumePay = $this->resumePay($init,36,$end);
         $resume = collect($resumePay)->only('hours','mints_adds');
 
         if(count($partials)==1){
