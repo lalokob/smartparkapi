@@ -245,7 +245,7 @@ class ParkController extends Controller
                 $tkt = $this->openTicket($plateid,$opening['rset'],$partials);//crear el ticket y agregar a una caja
                 $freeplace = $this->freeplace($idpark,$calc_attime);//liberar el espacio ocupado
                 $printed = $this->emmitPay($idpark);//imprimir ticket
-                // $this->cnx->commit();
+                $this->cnx->commit();
                 return response()->json(["calcs"=>$operates,"tkt"=>$tkt,"freeplace"=>$freeplace,"printed"=>$printed],200);
             }else{ return response()->json(["error"=>true,"msg"=>"Favor de cubrir el total"],200); }
         }else{ return response()->json(["error"=>true,"msg"=>$opening['msg']],200);}
