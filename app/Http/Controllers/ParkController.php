@@ -85,13 +85,10 @@ class ParkController extends Controller
     public function mginput(){
         $iam = $this->http->input('login');
         $input = $this->http->input('mginput');
-
+        
         //definiendo si la placa existe
-        $exist = $this->cnx->table('plates')->where('plate',$input)->orWhere('id',$input)->first();
-
-        //acerca de los lugares
-        // $placespark = $this->abtplaces();
-
+        $exist = $this->cnx->table('plates')->where('plate',$input)->orWhere('id',$input)->first();;
+        
         if($exist){
             //validar si esta activa en estacionamiento
             $itsinpark = $this->cnx->table('parking')->where('_plate',$exist->id)->first();
@@ -110,7 +107,6 @@ class ParkController extends Controller
                         ];
                     break;
                 }
-                
             }else{ $rset=["msg"=>"Reingreso!! ","inpark"=>205,"nextaction"=>"takeYourChoice"]; }//registrada previamente, pero no esta en estacionmaiento
         }else{ $rset=["msg"=>"Placa nueva, sin registro previo ".$input,"inpark"=>404,"nextaction"=>"itsYourChoice"]; }//sin registro previo
 
@@ -181,15 +177,20 @@ class ParkController extends Controller
             $printer -> text(" Entrada: ".$dtpark->init."\n");
             if($dtpark->notes!=""){
                 $printer -> feed(1);
-                $printer -> setReverseColors(true);
                 $printer -> text($dtpark->notes."\n");
-                $printer -> setReverseColors(false);
             }
             $printer -> feed(1);
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
             // $printer -> barcode($dtpark->_plate);
             $printer -> barcode($dtpark->idplate);
             $printer -> text("\nCalle San Pablo #10\nColonia Centro, C.P. 06060\nTel. 55 2220 2120\n");
+            $printer -> feed(2);
+            $printer->cut();
+
+            $printer -> setReverseColors(true);
+            $printer -> setTextSize(8, 8);
+            $printer -> text(" ".$dtpark->idpark." \n");
+            $printer -> setReverseColors(false);
             $printer -> feed(2);
             $printer->cut();
             $rset=["success"=>true,"msg"=>"Impresion correcta","data"=>$dtpark];
