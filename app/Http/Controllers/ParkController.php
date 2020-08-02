@@ -33,7 +33,7 @@ class ParkController extends Controller
     }
 
     public function tesprinter(){
-        $connector = new NetworkPrintConnector("192.168.1.130", 9100);
+        $connector = new NetworkPrintConnector(env("PRINTER_IP"), 9100);
         $printer = new Printer($connector);
 
         try {
@@ -78,6 +78,7 @@ class ParkController extends Controller
                     'parking._tariff as idtariff',
                     'parking.state as parkstate'
                 )
+                ->where('parking.state','<',3)
                 ->get();
     }
 
@@ -86,7 +87,7 @@ class ParkController extends Controller
         $input = $this->http->input('mginput');
 
         //definiendo si la placa existe
-        $exist = $this->cnx->table('plates')->where('plate',$input)->orWhere('hash',$input)->first();
+        $exist = $this->cnx->table('plates')->where('plate',$input)->orWhere('id',$input)->first();
 
         //acerca de los lugares
         // $placespark = $this->abtplaces();
@@ -127,19 +128,38 @@ class ParkController extends Controller
             $platetrycreate = $this->cnx->table('plates')->insertOrIgnore(["plate"=>$plate,"hash"=>$platemd5,"created_at"=>$this->today,"updated_at"=>$this->today,"state"=>1,"vhtype"=>1]);
             $dtplate = $this->cnx->table('plates')->where("plate",$plate)->first();
             $apark = $this->cnx->table('parking')->insertGetId(["_plate"=>$dtplate->id,"_mainservice"=>1,"_tariff"=>$tariff['value'],"state"=>1,"init"=>$this->today, "notes"=>$notes ]);
-            $dtpark = $this->cnx->table('parking')->where('id',$apark)->first();
-            $printer = $this->emmitCheckin($dtpark);
+            $dtprinted = $this->emmitCheckin($apark);
             $this->cnx->commit();
 
-            return response()->json(["dtplate"=>$dtplate,"dtpark"=>$dtpark,"printer"=>$printer],200);
+            return response()->json($dtprinted,200);
         } catch (\Throwable $e) {
             return response()->json(["dtpark"=>null,"msg"=>$e->getMessage()],200);
         }        
     }
 
-    private function emmitCheckin($dtpark){
-        $connector = new NetworkPrintConnector("192.168.1.130", 9100);
+    private function dataforemmit($idpark){
+        return $this->cnx->table('parking')
+            ->join('plates','plates.id','=','parking._plate')
+            ->select(
+                'parking.id as idpark',
+                'parking.init as init',
+                'parking.ends as ends',
+                'parking.notes as notes',
+                'parking._mainservice as idmservice',
+                'parking._tariff as idmtariff',
+                'parking.state as parkstate',
+                'plates.plate as plate',
+                'plates.id as idplate',
+                'plates.hash as hashplate'
+            )
+            ->where('parking.id',$idpark)->first();
+    }
+
+    private function emmitCheckin($idpark,$reprint=false){
+        $connector = new NetworkPrintConnector(env("PRINTER_IP"), 9100);
         $printer = new Printer($connector);
+
+        $dtpark = $this->dataforemmit($idpark);
 
         try {
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
@@ -148,17 +168,33 @@ class ParkController extends Controller
             $printer -> setEmphasis(false);
             $printer -> setTextSize(2, 1);
             $printer -> text("Grupo Vizcarra\n");
-            $printer -> setTextSize(1, 1);
-            $printer -> text("Inicio: ".$dtpark->init."\n");
+            $printer -> setJustification(Printer::JUSTIFY_LEFT);
             $printer -> feed(1);
-            $printer -> barcode($dtpark->_plate);
+            $printer -> setTextSize(1,1);
+            $printer -> text(" Folio: ");
+            $printer -> setTextSize(2,1);
+            $printer -> setReverseColors(true);
+            $printer -> text(" ".$dtpark->idpark." \n");
+            $printer -> setReverseColors(false);
+            $printer -> setTextSize(1, 1);
+            $printer -> text(" Placa: ".$dtpark->plate."\n");
+            $printer -> text(" Entrada: ".$dtpark->init."\n");
+            if($dtpark->notes!=""){
+                $printer -> feed(1);
+                $printer -> setReverseColors(true);
+                $printer -> text($dtpark->notes."\n");
+                $printer -> setReverseColors(false);
+            }
+            $printer -> feed(1);
+            $printer -> setJustification(Printer::JUSTIFY_CENTER);
+            // $printer -> barcode($dtpark->_plate);
+            $printer -> barcode($dtpark->idplate);
             $printer -> text("\nCalle San Pablo #10\nColonia Centro, C.P. 06060\nTel. 55 2220 2120\n");
-            $printer -> text(md5($dtpark->id));
-            $printer -> feed(5);
+            $printer -> feed(2);
             $printer->cut();
-            $rset=["success"=>true,"msg"=>"Impresion correcta"];
+            $rset=["success"=>true,"msg"=>"Impresion correcta","data"=>$dtpark];
         } catch (\Error $e) {
-            $rset = ["success"=>false,"msg"=>$e->getMessage()];
+            $rset = ["success"=>false,"msg"=>$e->getMessage(),"data"=>null];
         }finally {
             $printer -> close();
             return $rset;
@@ -201,31 +237,25 @@ class ParkController extends Controller
         $mservice = $topay['idmainservice'];
         $idpark = $topay['parkid'];
         
-        if($this->cnx->table('parking')->where('id',$idpark)->first()){
-            
-            $opening = $this->currentOpening($iam->rol,$iam->accid);
-            if($opening['rset']){
-                $operates = $this->operateSTD($partials,$init,$calc_attime);//sacando el total y cambio
-                if($operates['rest']>=0){
-                    $tkt = $this->openTicket($plateid,$opening['rset'],$partials);//crear el ticket y agregar a una caja
-                    $createHist=[ "start"=>$init, "ends"=>$calc_attime, "_plate"=>$plateid, "_tariff"=>$tariff, "_mainservice"=>$mservice, "_tkthead"=>$tkt, "pricetime"=>35];
-                    $freeplace = $this->freeplace($idpark);//liberar el espacio ocupado
-                    $idcopy = $this->addHistory($createHist);//crear registro historico del parking
-                    $printed = $this->emmitPay($idcopy);//imprimir ticket
-                    $this->cnx->commit();
-                    return response()->json(["calcs"=>$operates,"tkt"=>$tkt,"idcopy"=>$idcopy,"freeplace"=>$freeplace,"printed"=>$printed],200);
-                }else{ return response()->json(["error"=>true,"msg"=>"Favor de cubrir el total"],200); }
-            }else{ return response()->json(["error"=>true,"msg"=>$opening['msg']],200);}
-        }else{ return response()->json(["error"=>true,"msg"=>"Este id ($idpark), ya no existe"],200);}
+        $opening = $this->currentOpening($iam->rol,$iam->accid);
+        if($opening['rset']){
+            $operates = $this->operateSTD($partials,$init,$calc_attime);//sacando el total y cambio
+            if($operates['rest']>=0){
+                $tkt = $this->openTicket($plateid,$opening['rset'],$partials);//crear el ticket y agregar a una caja
+                $freeplace = $this->freeplace($idpark,$calc_attime);//liberar el espacio ocupado
+                $printed = $this->emmitPay($idpark);//imprimir ticket
+                // $this->cnx->commit();
+                return response()->json(["calcs"=>$operates,"tkt"=>$tkt,"freeplace"=>$freeplace,"printed"=>$printed],200);
+            }else{ return response()->json(["error"=>true,"msg"=>"Favor de cubrir el total"],200); }
+        }else{ return response()->json(["error"=>true,"msg"=>$opening['msg']],200);}
     }
 
-    private function emmitPay($idhist){
-        $connector = new NetworkPrintConnector("192.168.1.130", 9100);
+    private function emmitPay($idpark,$reprint=false){
+        $connector = new NetworkPrintConnector(env("PRINTER_IP"), 9100);
         $printer = new Printer($connector);
 
-        $tkt = $this->cnx->table('parking_history')->where('id',$idhist)->first();
-        $dtplate = $this->cnx->table('plates')->where('id',$tkt->_plate)->first();
-        $resume = $this->resumePay($tkt->start,35,$tkt->ends);
+        $dtpark = $this->dataforemmit($idpark);
+        $resume = $this->resumePay($dtpark->init,35,$dtpark->ends);
 
         try {
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
@@ -235,23 +265,21 @@ class ParkController extends Controller
             $printer -> setTextSize(2, 1);
             $printer -> text("Grupo Vizcarra\n");
             $printer -> setTextSize(1, 1);
-            $printer -> text("\nCalle San Pablo #10\nColonia Centro, C.P. 06060\nTel. 55 2220 2120\n");
             $printer -> setJustification(Printer::JUSTIFY_LEFT);
             $printer -> feed(1);
-            $printer -> text("Placa: ".$dtplate->plate."\n");
-            $printer -> text("Entrada: ".$tkt->start."\n");
-            $printer -> text("Salida: ".$tkt->ends."\n");
+            $printer -> text("Placa: ".$dtpark->plate."\n");
+            $printer -> text("Entrada: ".$dtpark->init."\n");
+            $printer -> text("Salida: ".$dtpark->ends."\n");
             $printer -> text("Tiempo Total: ".$resume['hours']." horas, ".$resume['mints_adds']." minutos\n");
             $printer -> feed(1);
             $printer -> setTextSize(2, 1);
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
             $printer -> text("Total: $".$resume['totalcost']." MXN\n");
             $printer -> setTextSize(1, 1);
-            $printer -> feed(1);
-
-            $printer -> feed(5);
+            $printer -> text("\nCalle San Pablo #10\nColonia Centro, C.P. 06060\nTel. 55 2220 2120\n");
+            $printer -> feed(2);
             $printer->cut();
-            $rset=["success"=>true,"msg"=>"Impresion correcta"];
+            $rset=["success"=>true,"msg"=>"Impresion correcta","park"=>$dtpark,"resume"=>$resume];
         } catch (\Error $e) {
             $rset = ["success"=>false,"msg"=>$e->getMessage()];
         }finally {
@@ -260,8 +288,8 @@ class ParkController extends Controller
         }
     }
 
-    private function freeplace($idpark){
-        return $this->cnx->table('parking')->where('id',$idpark)->delete();
+    private function freeplace($idpark,$timend){
+        return $this->cnx->table('parking')->where('id',$idpark)->update(["state"=>3,"ends"=>$timend]);
     }
 
     private function addHistory($createHist){
