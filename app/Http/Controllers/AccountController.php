@@ -65,7 +65,7 @@ class AccountController extends Controller
                 $dtcrypt = json_encode([ "accid"=>$account->id,"rol"=>$account->rolid,"ends"=>$this->todayobj->endOfDay() ]);
                 $apikey = $this->genApiKey($dtcrypt);
                 $usdata = collect($account)->except(['pass']);
-                $rset = [ "msg"=>"Welcome!!!","apikey"=>$apikey,"usdata"=>$usdata,"modules"=>$modules ];
+                $rset = [ "msg"=>"Welcome!!!","apikey"=>$apikey,"usdata"=>$usdata,"modules"=>$modules,"dtcrypt"=>$dtcrypt ];
             }else{ $rset = ["msg"=>"Credenciales Erroneas","apikey"=>null]; }
         }else{ $rset = ["msg"=>"Credenciales Incorrectas","apikey"=>null]; }
 

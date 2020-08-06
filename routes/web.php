@@ -28,9 +28,6 @@ $router->group(['prefix'=>'test',], function() use($router){
 
 $router->group(['prefix'=>'account'], function() use($router){
     $router->post('trylogin','AccountController@tryLogin');
-    // $router->post('trylogin',function(Request $req){
-    //     return response()->json($req->all(),200);
-    // });
     $router->group(['middleware'=>'auth'], function() use($router){
         $router->post('create','AccountController@create');
     });
@@ -40,12 +37,12 @@ $router->group(['prefix'=>'cashdesk','middleware'=>'auth'], function() use($rout
     $router->post('index','CashdeskController@index');
     $router->get('create','CashdeskController@create');
     $router->post('opening','CashdeskController@opening');
+    $router->post('cut','CashdeskController@cut');
 });
 
 $router->group(['prefix'=>'park','middleware'=>'auth'], function() use($router){
     $router->post('index','ParkController@index');
     $router->post('mginput','ParkController@mginput');
     $router->post('stdcheckin','ParkController@stdcheckin');
-    // $router->post('stdprecheckout','ParkController@stdprecheckout');//quiza deba ser removida
     $router->post('charge','ParkController@charge');
 });

@@ -29,7 +29,8 @@ class ParkController extends Controller
     }
 
     public function index(){
-        return ["park"=>$this->list()];
+        $iam = $this->http->input('login');
+        return ["park"=>$this->list(),"user"=>$iam];
     }
 
     public function tesprinter(){
@@ -68,6 +69,11 @@ class ParkController extends Controller
     }
 
     private function list(){
+        $rangedates=[
+            $this->todayobj->startOfDay()->format('Y-m-d H:i:s'),
+            $this->todayobj->endOfDay()->format('Y-m-d H:i:s')
+        ];
+
         return $this->cnx->table('parking')
                 ->join('plates','plates.id','=','parking._plate')
                 ->select(
@@ -75,41 +81,74 @@ class ParkController extends Controller
                     'plates.plate as plate',
                     'parking._mainservice as idmnservice',
                     'parking.init as init',
+                    'parking.init as ends',
                     'parking._tariff as idtariff',
                     'parking.state as parkstate'
                 )
-                ->where('parking.state','<',3)
+                ->whereBetween('parking.init',$rangedates)
+                ->orWhere('parking.state',4)
                 ->get();
     }
 
-    public function mginput(){
+    private function mycash(){
         $iam = $this->http->input('login');
-        $input = $this->http->input('mginput');
-        
-        //definiendo si la placa existe
-        $exist = $this->cnx->table('plates')->where('plate',$input)->orWhere('id',$input)->first();;
-        
-        if($exist){
-            //validar si esta activa en estacionamiento
-            $itsinpark = $this->cnx->table('parking')->where('_plate',$exist->id)->first();
-            if($itsinpark){// si esta en el estacionamiento
-                switch ($itsinpark->_mainservice) {
+
+        try {
+            $cashinstance = $this->cnx->table('cash_openings')
+                ->where([
+                    ['_assignto','=',$iam->accid],
+                    ['active','=',1]
+                ])->first();
+        } catch (\Except $e) { $cashinstance = $e->getMessage(); }
+        return $cashinstance;
+    }
+
+    public function mginput(){
+        try {
+            $iam = $this->http->input('login');
+            $input = $this->http->input('mginput');
+            
+            //definiendo si la placa existe
+            $exist = $this->cnx->table('plates')
+                ->where('plate',$input)
+                ->orWhere('id',$input)
+                ->first();
+            if($exist){// existencia de la placa, registro previo
+                //obtener ultimo registro del vehiculo en estacionamiento
+                
+                $inpark = $this->cnx->table('parking')
+                    ->where('_plate',$exist->id)
+                    ->orderBy('id','desc')->take(1)
+                    ->first();
+                // definiendo ultimo servicio principal
+                switch ($inpark->_mainservice) {
                     case 2: 
                         // $nextaction = $itsinpark->state==1 ? "digCheckOut":"digCheckIn";
-                        $rset=["msg"=>"Servicio de pension","inpark"=>$itsinpark];
+                        $rset=["msg"=>"Servicio de pension","parkexs"=>199];
                     break;
                     default:
-                        $precheckout = $this->stdprecheckout($exist->plate);
-                        $rset=[
-                            "msg"=>"Servicio de parqueo",
-                            "inpark"=>200,
-                            "precheckout"=>$precheckout
-                        ];
+                        $cashavls = count($this->cnx->table('cash_openings')->where('active',1)->get());
+                    
+                        if($inpark->state==1||$inpark->state==4){//es un servicio activo
+                            $msg = "Nuevo/Primer ingreso";
+                            $precheckout = $this->stdprecheckout($exist->plate);
+                            $parkexs = 200;
+                        }else{
+                            $msg = "Es un Reingreso";
+                            $precheckout=null;
+                            $parkexs = 205;
+                        }
+
+                        $rset=[ "msg"=>$msg, "precheckout"=>$precheckout, "parkexs"=>$parkexs, "cashavls"=>$cashavls,"iam"=>$iam ];
                     break;
                 }
-            }else{ $rset=["msg"=>"Reingreso!! ","inpark"=>205,"nextaction"=>"takeYourChoice"]; }//registrada previamente, pero no esta en estacionmaiento
-        }else{ $rset=["msg"=>"Placa nueva, sin registro previo ".$input,"inpark"=>404,"nextaction"=>"itsYourChoice"]; }//sin registro previo
-
+            }else{//placa sin registro previo 
+                $cashavls = count($this->cnx->table('cash_openings')->where('active',1)->get());
+                $rset=["msg"=>"Placa sin registro previo ".$input,"parkexs"=>404,"cashavls"=>$cashavls,"nextaction"=>"itsYourChoice", "iam"=>$iam]; 
+            }
+        } catch (\Error $e) {
+            $rset=["msg"=>$e->getMessage()];
+        }
         return response()->json($rset, 200);
     }
 
@@ -121,16 +160,50 @@ class ParkController extends Controller
         $notes = $this->http->input('notes');
 
         try {
-            $platetrycreate = $this->cnx->table('plates')->insertOrIgnore(["plate"=>$plate,"hash"=>$platemd5,"created_at"=>$this->today,"updated_at"=>$this->today,"state"=>1,"vhtype"=>1]);
-            $dtplate = $this->cnx->table('plates')->where("plate",$plate)->first();
-            $apark = $this->cnx->table('parking')->insertGetId(["_plate"=>$dtplate->id,"_mainservice"=>1,"_tariff"=>$tariff['value'],"state"=>1,"init"=>$this->today, "notes"=>$notes ]);
-            $dtprinted = $this->emmitCheckin($apark);
-            $this->cnx->commit();
 
-            return response()->json($dtprinted,200);
-        } catch (\Throwable $e) {
+            //obtener el opening de caja
+            if($iam->rol==4){// el rol 4, puede capturar y enviarlos a las cajas activas
+                //obtenemos cualquier instancia
+                $_openid = $this->cnx->table('cash_openings')->where('active',1)->first();
+                if($_openid){//si hay instancias de cajas
+                    $openid = $_openid->id;// se setea el id del opening
+                    $msg = "solo puedo capturar placas, no cobrar ni dar salidas";
+                }else{// se notifica al usuario que no hay instancias de cajas activas
+                    $openid=null;
+                    $msg = "no hay instancias de caja activas";
+                }
+            }elseif ($iam->rol==1||$iam->rol==2) {// cuando el rol es cajero o root
+                $mycash = $this->mycash();
+                if($mycash){
+                    $openid = $mycash->id;
+                    $msg="tengo caja asignada";
+                }else{
+                    $_openid = $this->cnx->table('cash_openings')->where('active',1)->first();
+                    if($_openid){//si hay instancias de cajas
+                        $openid = $_openid->id;// se setea el id del opening
+                        $msg = "soy root y no tengo caja asignada, pero se lo mando a la primer activa que encuentre";
+                    }else{// se notifica al usuario que no hay instancias de cajas activas
+                        $openid=null;
+                        $msg = "no hay instancias de caja activas";
+                    }
+                }
+            }
+
+            if($openid){
+                $platetrycreate = $this->cnx->table('plates')->insertOrIgnore(["plate"=>$plate,"hash"=>$platemd5,"created_at"=>$this->today,"updated_at"=>$this->today,"state"=>1,"vhtype"=>1]);
+                $dtplate = $this->cnx->table('plates')->where("plate",$plate)->first();
+                $apark = $this->cnx->table('parking')->insertGetId(["_plate"=>$dtplate->id,"_mainservice"=>1,"_tariff"=>$tariff['value'],"init"=>$this->today,"notes"=>$notes,"state"=>1,"_opening"=>$openid ]);
+                $dtprinted = $this->emmitCheckin($apark);
+                $this->cnx->commit();
+                $rset = ["msg"=>$msg,"openid"=>$openid,"iam"=>$iam,"dtpark"=>$dtprinted,"idpark"=>$apark];
+            }else{
+                $rset = ["msg"=>$msg,"dtpark"=>null,"iam"=>$iam];
+            }
+
+            return response()->json($rset,200);
+        } catch (\Except $e) {
             return response()->json(["dtpark"=>null,"msg"=>$e->getMessage()],200);
-        }        
+        }                
     }
 
     private function dataforemmit($idpark){
@@ -152,7 +225,14 @@ class ParkController extends Controller
     }
 
     private function emmitCheckin($idpark,$reprint=false){
-        $connector = new NetworkPrintConnector(env("PRINTER_IP"), 9100);
+        $iam = $this->http->input('login');
+        if($iam->rol==1||$iam->rol==2){
+            $printip = env("PRINTER_IP");
+        }else{
+            $printip = env("PRINTER_CAP");
+        }
+
+        $connector = new NetworkPrintConnector($printip, 9100);
         $printer = new Printer($connector);
 
         $dtpark = $this->dataforemmit($idpark);
@@ -181,7 +261,6 @@ class ParkController extends Controller
             }
             $printer -> feed(1);
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
-            // $printer -> barcode($dtpark->_plate);
             $printer -> barcode($dtpark->idplate);
             $printer -> text("\nCalle San Pablo #10\nColonia Centro, C.P. 06060\nTel. 55 2220 2120\n");
             $printer -> feed(2);
@@ -203,9 +282,6 @@ class ParkController extends Controller
     }
 
     private function stdprecheckout($plate){
-        // $iam = $this->http->input('login');
-        // $input = $this->http->input('input');
-
         //getting data plate
         $dtplate = $this->cnx->table('plates')
             ->join('parking','parking._plate','=','plates.id')
@@ -220,8 +296,6 @@ class ParkController extends Controller
                 'parking._mainservice as idmainservice'
             )
             ->first();
-        
-        /** me quede aqui, ya hace el calculo del tiempo de estacionamiento */
         $resumePay = $this->resumePay($dtplate->init,36);
 
         return ["dtpark"=>$dtplate,"topay"=>$resumePay];
@@ -395,16 +469,6 @@ class ParkController extends Controller
             "totalforfracc"=>$fracc,
             "totalcost"=>$total_cost,
             "time_calc"=>$this->today
-        ];
-    }
-
-    private function abtplaces(){
-        $placesparkcfg = $this->cnx->table('park_config')->first();
-        $occuped = $this->cnx->table('parking')->get();
-
-        return [
-            "maxparkplaces"=>$placesparkcfg,
-            "occuped"=>$occuped
         ];
     }
 }
