@@ -119,7 +119,7 @@ class CashdeskController extends Controller
             // estacionamientos activos
             $parksopens = collect($parksinopen)->filter(function($item,$key){ return $item->state==1; })->values()->all();
             // descuadre
-            $difference = ($total_opening+$totalOfCash)-$totaldeclared;
+            $difference = $totaldeclared-$totalOfCash;
             
             $resume=[
                 "msg"=>"Corte realizado",
