@@ -70,8 +70,9 @@ class CashdeskController extends Controller
             $this->todayobj->endOfDay()->format('Y-m-d H:i:s')
         ];
 
+        
         try {
-
+            
             foreach ($declaredcash as $decl) {
                 $row = $this->cnx->table('currency_denoms')->where('id',$decl['id'])->first();
                 $value=$row->value;
@@ -79,6 +80,7 @@ class CashdeskController extends Controller
                 $totaldeclared+=$total;
                 $declareds[]=["value"=>$value,"total"=>$total,"_denom"=>$row->id,"quantity"=>$decl['cant']];
             }
+            
 
             //id del opening de la caja
             $openid = $this->cnx->table('cash_openings')
@@ -118,8 +120,10 @@ class CashdeskController extends Controller
             $totalOfCash = collect($parksclosed)->reduce(function ($ammount, $item) { return $ammount + $item->totaltkt['totalcost'];  });
             // estacionamientos activos
             $parksopens = collect($parksinopen)->filter(function($item,$key){ return $item->state==1; })->values()->all();
+            //total de entradas
+            $totalentries = $totalOfCash+$total_opening;
             // descuadre
-            $difference = $totaldeclared-$totalOfCash;
+            $difference = $totaldeclared-$totalentries;
             
             $resume=[
                 "msg"=>"Corte realizado",
@@ -160,7 +164,7 @@ class CashdeskController extends Controller
                 $printer -> setTextSize(1, 1);
                 $printer -> text("  Efectivo en caja ... $ ".$totalOfCash."\n");
                 $printer -> text("  Apertura ........... $ ".$total_opening."\n");
-                $printer -> text("  Total de entradas .. $ ".($totalOfCash+$total_opening)."\n");
+                $printer -> text("  Total de entradas .. $ ".$totalentries."\n");
                 $printer -> text("  Declaracion (EFE) .. $ ".$totaldeclared."\n");
                 $printer -> text("  Descuadre .......... $ ".$difference."\n");
                 $printer -> feed(1);
@@ -168,11 +172,10 @@ class CashdeskController extends Controller
                 $printer -> text("----------------------------------------\n");
                 $printer -> setTextSize(2, 1);
                 $printer -> text("RESUMEN\n");
-                $printer -> feed(2);
                 $printer -> setTextSize(1, 1);
                 $printer -> setJustification(Printer::JUSTIFY_LEFT);
-                $printer -> text("Apertura: ... ".$openid->id."\n");
-                $printer -> text("Corte: ... ".$resume['cut']['id']."\n");
+                // $printer -> text("Apertura: ".$openid->id."\n");
+                // $printer -> text("Corte: ".$resume['cut']['id']."\n");
                 $printer -> text("Entradas registradas: ... ".sizeof($parksinopen)."\n");
                 $printer -> text("Entradas cobradas: ...... ".sizeof($parksclosed)."\n");
                 $printer -> text("Entradas sin cobrar: .... ".sizeof($parksopens)."\n");
