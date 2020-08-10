@@ -80,7 +80,6 @@ class CashdeskController extends Controller
                 $totaldeclared+=$total;
                 $declareds[]=["value"=>$value,"total"=>$total,"_denom"=>$row->id,"quantity"=>$decl['cant']];
             }
-            
 
             //id del opening de la caja
             $openid = $this->cnx->table('cash_openings')
@@ -312,7 +311,7 @@ class CashdeskController extends Controller
             ->where('id',$cashid)
             ->update([
                 "_state"=>$tostate,
-                'updated_at'=>$this->today
+                "updated_at"=>$this->today
             ]);
     }
 
@@ -352,6 +351,61 @@ class CashdeskController extends Controller
     }
 
     private function list(){
-        return $this->cnx->table('cashregisters')->get();
+        $rangedates=[
+            $this->todayobj->startOfDay()->format('Y-m-d H:i:s'),
+            $this->todayobj->endOfDay()->format('Y-m-d H:i:s')
+        ];
+
+        $cashesdb = $this->cnx->table('cashregisters')->get();
+    
+        $cashdesks = collect($cashesdb)->map(function($cash,$key) use($rangedates){
+            $openandcut = $this->openandcut($cash->id,$rangedates);
+            $cash->opening=$openandcut['opening'];
+            $cash->cut=$openandcut['cut'];
+
+            return $cash;
+        })->values()->all();
+
+        return $cashdesks;
+    }
+
+    private function openandcut($cash,$rangedates){
+        $opening = $this->cnx->table('cash_openings AS copn')
+                    ->select(
+                        'copn.id as id',
+                        'copn.active as isactive',
+                        'copn.init as init',
+                        'usby.id as usbyid',
+                        'usby.fnames as usbynames',
+                        'usby.lnames as usbylames',
+                        'usby.nick as usbynick',
+                        'usto.id as ustoid',
+                        'usto.fnames as ustonames',
+                        'usto.lnames as ustolames',
+                        'usto.nick as ustonick'
+                    )
+                    ->join('users AS usby','usby.id','=','copn._assignby')
+                    ->join('users AS usto','usto.id','=','copn._assignto')
+                    ->where('copn._cash',$cash)
+                    ->whereBetween('copn.init',$rangedates)
+                    ->first();
+
+            if($opening){
+                $cut = $this->cnx->table('cash_cuts AS cut')
+                    ->select(
+                        'cut.id as id',
+                        'cut.cut_init as makeit',
+                        'cut._opening as openingid',
+                        'usby.fnames as fnames',
+                        'usby.lnames as lnames',
+                        'usby.nick as nick'
+                    )
+                    ->join('users AS usby','usby.id','=','cut.cut_by')
+                    ->where('cut._opening',$opening->id)
+                    // ->whereBetween('cut.cut_init',$rangedates)
+                    ->first();
+            }else{ $cut=null; }
+
+        return ["opening"=>$opening,"cut"=>$cut];
     }
 }

@@ -83,7 +83,8 @@ class ParkController extends Controller
                     'parking.init as init',
                     'parking.init as ends',
                     'parking._tariff as idtariff',
-                    'parking.state as parkstate'
+                    'parking.state as parkstate',
+                    'parking.id as parkid'
                 )
                 ->whereBetween('parking.init',$rangedates)
                 ->orWhere('parking.state',4)
@@ -118,7 +119,7 @@ class ParkController extends Controller
                 
                 $inpark = $this->cnx->table('parking')
                     ->where('_plate',$exist->id)
-                    ->orderBy('id','desc')->take(1)
+                    ->orderBy('id','desc')
                     ->first();
                 // definiendo ultimo servicio principal
                 switch ($inpark->_mainservice) {
@@ -131,7 +132,7 @@ class ParkController extends Controller
                     
                         if($inpark->state==1||$inpark->state==4){//es un servicio activo
                             $msg = "Nuevo/Primer ingreso";
-                            $precheckout = $this->stdprecheckout($exist->plate);
+                            $precheckout = $this->stdprecheckout($inpark->id);
                             $parkexs = 200;
                         }else{
                             $msg = "Es un Reingreso";
@@ -281,12 +282,11 @@ class ParkController extends Controller
         }
     }
 
-    private function stdprecheckout($plate){
+    private function stdprecheckout($idpark){
         //getting data plate
-        $dtplate = $this->cnx->table('plates')
-            ->join('parking','parking._plate','=','plates.id')
-            ->where('plates.plate',$plate)
-            ->orWhere('plates.hash',$plate)
+        $dtplate = $this->cnx->table('parking')
+            ->join('plates','parking._plate','=','plates.id')
+            ->where('parking.id',$idpark)
             ->select(
                 'parking.id as parkid',
                 'parking.init as init',
@@ -300,6 +300,26 @@ class ParkController extends Controller
 
         return ["dtpark"=>$dtplate,"topay"=>$resumePay];
     }
+
+    // private function stdprecheckout($plate){
+    //     //getting data plate
+    //     $dtplate = $this->cnx->table('plates')
+    //         ->join('parking','parking._plate','=','plates.id')
+    //         ->where('plates.plate',$plate)
+    //         ->orWhere('plates.hash',$plate)
+    //         ->select(
+    //             'parking.id as parkid',
+    //             'parking.init as init',
+    //             'plates.plate as plate',
+    //             'plates.id as plateid',
+    //             'parking._tariff as idtariff',
+    //             'parking._mainservice as idmainservice'
+    //         )
+    //         ->first();
+    //     $resumePay = $this->resumePay($dtplate->init,36);
+
+    //     return ["dtpark"=>$dtplate,"topay"=>$resumePay];
+    // }
 
     public function charge(){
         $iam = $this->http->input('login');
@@ -319,7 +339,7 @@ class ParkController extends Controller
                 $tkt = $this->openTicket($plateid,$opening['rset'],$partials);//crear el ticket y agregar a una caja
                 $freeplace = $this->freeplace($idpark,$calc_attime);//liberar el espacio ocupado
                 $printed = $this->emmitPay($idpark);//imprimir ticket
-                $this->cnx->commit();
+                // $this->cnx->commit();
                 return response()->json(["calcs"=>$operates,"tkt"=>$tkt,"freeplace"=>$freeplace,"printed"=>$printed],200);
             }else{ return response()->json(["error"=>true,"msg"=>"Favor de cubrir el total"],200); }
         }else{ return response()->json(["error"=>true,"msg"=>$opening['msg']],200);}
