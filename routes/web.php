@@ -37,6 +37,7 @@ $router->group(['prefix'=>'cashdesk','middleware'=>'auth'], function() use($rout
     $router->post('index','CashdeskController@index');
     $router->get('create','CashdeskController@create');
     $router->post('opening','CashdeskController@opening');
+    $router->post('reactive','CashdeskController@reactive');
     $router->post('cut','CashdeskController@cut');
 });
 

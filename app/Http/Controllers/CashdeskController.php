@@ -123,6 +123,9 @@ class CashdeskController extends Controller
             $totalentries = $totalOfCash+$total_opening;
             // descuadre
             $difference = $totaldeclared-$totalentries;
+
+            //obtener apertura y corte formateados
+            $openandcut = $this->openandcut($idcash);
             
             $resume=[
                 "msg"=>"Corte realizado",
@@ -138,10 +141,12 @@ class CashdeskController extends Controller
                 "declaredcash"=>$declareds,
                 "totaldeclared"=>$totaldeclared,
                 "cut"=>null,
-                "changes"=>$changes
+                "changes"=>$changes,
+                "openandcut"=>null
             ];
 
             $resume['cut'] = $this->saveCut($resume);
+            $resume['openandcut'] = $this->openandcut($idcash);
 
             try {
                 $this->cnx->commit();
@@ -161,23 +166,23 @@ class CashdeskController extends Controller
                 $printer -> setJustification(Printer::JUSTIFY_LEFT);
                 $printer -> feed(1);
                 $printer -> setTextSize(1, 1);
-                $printer -> text("  Efectivo en caja ... $ ".$totalOfCash."\n");
-                $printer -> text("  Apertura ........... $ ".$total_opening."\n");
-                $printer -> text("  Total de entradas .. $ ".$totalentries."\n");
-                $printer -> text("  Declaracion (EFE) .. $ ".$totaldeclared."\n");
-                $printer -> text("  Descuadre .......... $ ".$difference."\n");
+                $printer -> text("  Cobros ............. $".$totalOfCash."\n");
+                $printer -> text("  Apertura ........... $".$total_opening."\n");
+                $printer -> text("  Efectivo en caja ... $".$totalentries."\n");
+                $printer -> text("  Declaracion (EFE) .. $".$totaldeclared."\n");
+                $printer -> text("  Descuadre .......... $".$difference."\n");
                 $printer -> feed(1);
                 $printer -> setJustification(Printer::JUSTIFY_CENTER);
                 $printer -> text("----------------------------------------\n");
                 $printer -> setTextSize(2, 1);
                 $printer -> text("RESUMEN\n");
                 $printer -> setTextSize(1, 1);
+                $printer -> text("----------------------------------------\n");
                 $printer -> setJustification(Printer::JUSTIFY_LEFT);
-                // $printer -> text("Apertura: ".$openid->id."\n");
-                // $printer -> text("Corte: ".$resume['cut']['id']."\n");
-                $printer -> text("Entradas registradas: ... ".sizeof($parksinopen)."\n");
-                $printer -> text("Entradas cobradas: ...... ".sizeof($parksclosed)."\n");
-                $printer -> text("Entradas sin cobrar: .... ".sizeof($parksopens)."\n");
+                $printer -> feed(1);
+                $printer -> text(" Entradas registradas: ... ".sizeof($parksinopen)."\n");
+                $printer -> text(" Entradas cobradas: ...... ".sizeof($parksclosed)."\n");
+                $printer -> text(" Entradas sin cobrar: .... ".sizeof($parksopens)."\n");
                 $printer -> feed(3);
                 $printer->cut();
                 $rset=["success"=>true,"msg"=>"Impresion correcta","resume"=>$resume];
@@ -218,7 +223,7 @@ class CashdeskController extends Controller
 
         //actualizar el estado de opening=0 (cash_openings) y caja=2 (cashregisters)
         $closeopen=$this->cnx->table('cash_openings')->where('id',$data['openid']->id)->update(['active'=>0]);
-        $closecash=$this->changestate($data['openid']->id,2);
+        $closecash=$this->changestate($data['cashdesk']['id'],2);
 
         return ["id"=>$idcut,"declaredsave"=>$denoms,"closedopening"=>$closeopen,"closedcash"=>$closecash];
     }
@@ -291,10 +296,13 @@ class CashdeskController extends Controller
                     //cambio de status a la caja
                     $updt = $this->changestate($cashid,3);
 
+                    $openandcut = $this->openandcut($cashid);
+                    $opening = $openandcut['opening'];
+
                     //aplicando commit
                     $this->cnx->commit();
 
-                    $rset=["msg"=>"opening done!!!","rset"=>["updt"=>$updt,"openid"=>$newid] ];
+                    $rset=["msg"=>"opening done!!!","rset"=>["updt"=>$updt,"opening"=>$opening,"openid"=>$newid] ];
                 }else{
                     $rset=["msg"=>"impossible opening!!","rset"=>null, "cashstate"=>$cashstate ];
                 }
@@ -304,6 +312,42 @@ class CashdeskController extends Controller
         }
 
         return response()->json($rset,200);
+    }
+
+    public function reactive(){
+        $opening = $this->http->input('opening');
+        $openid = $opening['id'];
+
+        //obtener la data del opening
+        $openingdata = $this->cnx->table('cash_openings')->where('id',$openid)->first();
+
+        //localizar el id del cash_cut correspondiente al cashcut entrante
+        $cut = $this->cnx->table('cash_cuts')->where('_opening',$openid)->first();
+
+        //eliminar el cut_denoms, correspondiente al cashcut localizado
+        $cutdeclared = $this->cnx->table('cut_denoms')->where('_cut',$cut->id)->delete();
+        
+        //eliminar el cash_cut localizado
+        $cutdelete = $this->cnx->table('cash_cuts')->where('_opening',$openid)->delete();
+
+        //volver a reactivar el campo active correspondiente al opening entrante
+        $react_opening = $this->cnx->table('cash_openings')->where('id',$openid)->update(['active'=>1]);
+        
+        //cambiar status de la caja a en uso
+        $react_cash = $this->changestate($openingdata->_cash,3);
+
+        $this->cnx->commit();
+
+        //obtener ultimo 
+        return response()->json([
+            "openingdata"=>$openingdata->_cash,
+            "opening"=>$opening,
+            "cut"=>$cut,
+            "cutdeclared"=>$cutdeclared,
+            "cutdelete"=>$cutdelete,
+            "react_opening"=>$react_opening,
+            "react_cash"=>$react_cash
+        ],200);
     }
 
     private function changestate($cashid,$tostate){
@@ -351,15 +395,11 @@ class CashdeskController extends Controller
     }
 
     private function list(){
-        $rangedates=[
-            $this->todayobj->startOfDay()->format('Y-m-d H:i:s'),
-            $this->todayobj->endOfDay()->format('Y-m-d H:i:s')
-        ];
 
         $cashesdb = $this->cnx->table('cashregisters')->get();
     
-        $cashdesks = collect($cashesdb)->map(function($cash,$key) use($rangedates){
-            $openandcut = $this->openandcut($cash->id,$rangedates);
+        $cashdesks = collect($cashesdb)->map(function($cash,$key){
+            $openandcut = $this->openandcut($cash->id);
             $cash->opening=$openandcut['opening'];
             $cash->cut=$openandcut['cut'];
 
@@ -369,7 +409,11 @@ class CashdeskController extends Controller
         return $cashdesks;
     }
 
-    private function openandcut($cash,$rangedates){
+    private function openandcut($cash){
+        /**
+         * Devuelve la ultima apertura y su correspondiente corte
+         * de "X" caja
+         */
         $opening = $this->cnx->table('cash_openings AS copn')
                     ->select(
                         'copn.id as id',
@@ -377,17 +421,18 @@ class CashdeskController extends Controller
                         'copn.init as init',
                         'usby.id as usbyid',
                         'usby.fnames as usbynames',
-                        'usby.lnames as usbylames',
+                        'usby.lnames as usbylnames',
                         'usby.nick as usbynick',
                         'usto.id as ustoid',
                         'usto.fnames as ustonames',
-                        'usto.lnames as ustolames',
+                        'usto.lnames as ustolnames',
                         'usto.nick as ustonick'
                     )
                     ->join('users AS usby','usby.id','=','copn._assignby')
                     ->join('users AS usto','usto.id','=','copn._assignto')
                     ->where('copn._cash',$cash)
-                    ->whereBetween('copn.init',$rangedates)
+                    // ->whereBetween('copn.init',$rangedates)
+                    ->orderBy('id','desc')
                     ->first();
 
             if($opening){

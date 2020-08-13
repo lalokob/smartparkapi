@@ -301,26 +301,6 @@ class ParkController extends Controller
         return ["dtpark"=>$dtplate,"topay"=>$resumePay];
     }
 
-    // private function stdprecheckout($plate){
-    //     //getting data plate
-    //     $dtplate = $this->cnx->table('plates')
-    //         ->join('parking','parking._plate','=','plates.id')
-    //         ->where('plates.plate',$plate)
-    //         ->orWhere('plates.hash',$plate)
-    //         ->select(
-    //             'parking.id as parkid',
-    //             'parking.init as init',
-    //             'plates.plate as plate',
-    //             'plates.id as plateid',
-    //             'parking._tariff as idtariff',
-    //             'parking._mainservice as idmainservice'
-    //         )
-    //         ->first();
-    //     $resumePay = $this->resumePay($dtplate->init,36);
-
-    //     return ["dtpark"=>$dtplate,"topay"=>$resumePay];
-    // }
-
     public function charge(){
         $iam = $this->http->input('login');
         $topay = $this->http->input('topay');
@@ -339,7 +319,7 @@ class ParkController extends Controller
                 $tkt = $this->openTicket($plateid,$opening['rset'],$partials);//crear el ticket y agregar a una caja
                 $freeplace = $this->freeplace($idpark,$calc_attime);//liberar el espacio ocupado
                 $printed = $this->emmitPay($idpark);//imprimir ticket
-                // $this->cnx->commit();
+                $this->cnx->commit();
                 return response()->json(["calcs"=>$operates,"tkt"=>$tkt,"freeplace"=>$freeplace,"printed"=>$printed],200);
             }else{ return response()->json(["error"=>true,"msg"=>"Favor de cubrir el total"],200); }
         }else{ return response()->json(["error"=>true,"msg"=>$opening['msg']],200);}
