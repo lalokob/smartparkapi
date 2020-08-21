@@ -33,12 +33,13 @@ $router->group(['prefix'=>'account'], function() use($router){
     });
 });
 
-$router->group(['prefix'=>'cashdesk','middleware'=>'auth'], function() use($router){
+$router->group(['prefix'=>'cashdesks','middleware'=>'auth'], function() use($router){
     $router->post('index','CashdeskController@index');
     $router->get('create','CashdeskController@create');
     $router->post('opening','CashdeskController@opening');
     $router->post('reactive','CashdeskController@reactive');
     $router->post('cut','CashdeskController@cut');
+    $router->post('shield','CashdeskController@shield');
 });
 
 $router->group(['prefix'=>'park','middleware'=>'auth'], function() use($router){

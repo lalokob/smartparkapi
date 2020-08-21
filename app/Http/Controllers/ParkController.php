@@ -225,6 +225,12 @@ class ParkController extends Controller
             ->where('parking.id',$idpark)->first();
     }
 
+    private function title(Printer $printer, $text){
+        $printer -> selectPrintMode(Printer::MODE_EMPHASIZED);
+        $printer -> text("\n" . $text);
+        $printer -> selectPrintMode(); // Reset
+    }
+
     private function emmitCheckin($idpark,$reprint=false){
         $iam = $this->http->input('login');
         if($iam->rol==1||$iam->rol==2){
@@ -233,12 +239,12 @@ class ParkController extends Controller
             $printip = env("PRINTER_CAP");
         }
 
-        $connector = new NetworkPrintConnector($printip, 9100);
-        $printer = new Printer($connector);
-
         $dtpark = $this->dataforemmit($idpark);
 
         try {
+            $connector = new NetworkPrintConnector($printip, 9100);
+            $printer = new Printer($connector);
+            $img = EscposImage::load(realpath(dirname(__FILE__))."/carp.png",false);
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
             $printer -> setEmphasis(true);
             $printer -> text("Estacionamiento\n");
@@ -256,12 +262,16 @@ class ParkController extends Controller
             $printer -> setTextSize(1, 1);
             $printer -> text(" Placa: ".$dtpark->plate."\n");
             $printer -> text(" Entrada: ".$dtpark->init."\n");
+            
+            $printer -> graphics($img);
             if($dtpark->notes!=""){
                 $printer -> feed(1);
                 $printer -> text($dtpark->notes."\n");
             }
             $printer -> feed(1);
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
+            $printer -> setBarcodeHeight(70);
+            $printer -> setBarcodeWidth(3);
             $printer -> barcode($dtpark->idplate);
             $printer -> text("\nCalle San Pablo #10\nColonia Centro, C.P. 06060\nTel. 55 2220 2120\n");
             $printer -> feed(2);

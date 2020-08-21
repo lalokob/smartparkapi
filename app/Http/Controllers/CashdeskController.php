@@ -453,4 +453,71 @@ class CashdeskController extends Controller
 
         return ["opening"=>$opening,"cut"=>$cut];
     }
+
+    /**
+     * trabajo con una sola caja
+     */
+
+    private function mycash(){
+        $iam = $this->http->input('login');
+
+        try {
+            $cashinstance = $this->cnx->table('cash_openings')
+                ->where([
+                    ['_assignto','=',$iam->accid],
+                    ['active','=',1]
+                ])->first();
+        } catch (\Except $e) { $cashinstance = $e->getMessage(); }
+        return $cashinstance;
+    }
+
+
+    private function exists($id){
+        return $this->cnx->table('cashregisters')->where('id',$id)->first();
+    }
+
+    public function shield(){
+        $iam = $this->http->input('login');
+        $cashdesk = $this->http->input('cashdesk');
+        $instance = null;
+        $currencies = null;
+        $cashiers = null;
+        $openandcut = null;
+        $id = $cashdesk['id'];
+        $cash = $this->exists($id);
+
+        //Comprobar existencia de la caja
+        if($cash){
+            switch($iam->rol){
+                // el rol root tiene acceso  directo
+                case 1: $shield=true; break;
+                // el rol cajero, debe autenticarse contra EL OPENING ACTUAL de la caja
+                case 2:
+                    $instance = $this->mycash();
+                    if($instance){ $shield=true; }else{ $shield=false; }
+                break;
+
+                default: $shield=false; break;
+            }
+
+            if($shield){
+                $currencies = $this->getcurrencies();
+                $cashiers = $this->cashiers();
+                $openandcut = $this->openandcut($id);
+            }
+
+            $resp = [
+                "shield"=>$shield,
+                "instance"=>$instance,
+                "currencies"=>$currencies,
+                "cashiers"=>$cashiers,
+                "openandcut"=>$openandcut,
+                "cash"=>$cash
+            ];
+        }else{
+            $resp = ["shield"=>false ];
+        }
+
+        return response()->json($resp,200);
+    }
 }
