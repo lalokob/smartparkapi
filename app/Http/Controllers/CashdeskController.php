@@ -471,7 +471,6 @@ class CashdeskController extends Controller
         return $cashinstance;
     }
 
-
     private function exists($id){
         return $this->cnx->table('cashregisters')->where('id',$id)->first();
     }
@@ -520,4 +519,6 @@ class CashdeskController extends Controller
 
         return response()->json($resp,200);
     }
+
+    
 }
