@@ -113,10 +113,9 @@ class ParkController extends Controller
             //definiendo si la placa existe
             $exist = $this->cnx->table('plates')
                     ->where('plate',$input)
-                    ->orWhere('id',$input)
                     ->first();
 
-            if($exist){
+            if($exist){//si existe 
                 $inpark = $this->cnx->table('parking')
                     ->where('_plate',$exist->id)
                     ->orderBy('id','desc')
