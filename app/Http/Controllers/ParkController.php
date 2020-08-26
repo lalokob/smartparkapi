@@ -108,20 +108,26 @@ class ParkController extends Controller
         try {
             $iam = $this->http->input('login');
             $input = $this->http->input('mginput');
+            $inpark=null;
             
             //definiendo si la placa existe
             $exist = $this->cnx->table('plates')
-                ->where('plate',$input)
-                ->orWhere('id',$input)
-                ->first();
-            if($exist){// existencia de la placa, registro previo
-                //obtener ultimo registro del vehiculo en estacionamiento
-                
+                    ->where('plate',$input)
+                    ->orWhere('id',$input)
+                    ->first();
+
+            if($exist){
                 $inpark = $this->cnx->table('parking')
                     ->where('_plate',$exist->id)
                     ->orderBy('id','desc')
                     ->first();
-                // definiendo ultimo servicio principal
+            }else{
+                $inpark = $this->cnx->table('parking')
+                    ->where('id',$input)
+                    ->first();
+            }
+
+            if($inpark){
                 switch ($inpark->_mainservice) {
                     case 2: 
                         // $nextaction = $itsinpark->state==1 ? "digCheckOut":"digCheckIn";
@@ -143,7 +149,7 @@ class ParkController extends Controller
                         $rset=[ "msg"=>$msg, "precheckout"=>$precheckout, "parkexs"=>$parkexs, "cashavls"=>$cashavls,"iam"=>$iam ];
                     break;
                 }
-            }else{//placa sin registro previo 
+            }else{
                 $cashavls = count($this->cnx->table('cash_openings')->where('active',1)->get());
                 $rset=["msg"=>"Placa sin registro previo ".$input,"parkexs"=>404,"cashavls"=>$cashavls,"nextaction"=>"itsYourChoice", "iam"=>$iam]; 
             }
