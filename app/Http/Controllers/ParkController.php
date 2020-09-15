@@ -26,8 +26,8 @@ class ParkController extends Controller
         $this->today = Carbon::now()->format('Y-m-d H:i');
         $this->cnx = DB::connection(); 
         $this->cnx->beginTransaction();
-    }
-
+    } 
+    // 688 263
     public function index(){
         $iam = $this->http->input('login');
         return ["park"=>$this->list(),"user"=>$iam];
@@ -486,4 +486,6 @@ class ParkController extends Controller
             "time_calc"=>$this->today
         ];
     }
+
+    
 }

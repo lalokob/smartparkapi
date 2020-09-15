@@ -40,6 +40,7 @@ $router->group(['prefix'=>'cashdesks','middleware'=>'auth'], function() use($rou
     $router->post('reactive','CashdeskController@reactive');
     $router->post('cut','CashdeskController@cut');
     $router->post('shield','CashdeskController@shield');
+    $router->post('historic','CashdeskController@historic');
 });
 
 $router->group(['prefix'=>'park','middleware'=>'auth'], function() use($router){

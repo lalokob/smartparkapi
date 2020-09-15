@@ -471,6 +471,17 @@ class CashdeskController extends Controller
         return $cashinstance;
     }
 
+    private function instance($id){
+        try {
+            $cashinstance = $this->cnx->table('cash_openings')
+                ->where([
+                    ['_cash','=',$id],
+                    ['active','=',1]
+                ])->first();
+        } catch (\Except $e) { $cashinstance = $e->getMessage(); }
+        return $cashinstance;
+    }
+
     private function exists($id){
         return $this->cnx->table('cashregisters')->where('id',$id)->first();
     }
@@ -489,7 +500,10 @@ class CashdeskController extends Controller
         if($cash){
             switch($iam->rol){
                 // el rol root tiene acceso  directo
-                case 1: $shield=true; break;
+                case 1: 
+                    $shield=true;
+                    $instance = $this->instance($id);
+                break;
                 // el rol cajero, debe autenticarse contra EL OPENING ACTUAL de la caja
                 case 2:
                     $instance = $this->mycash();
@@ -517,6 +531,67 @@ class CashdeskController extends Controller
             $resp = ["shield"=>false ];
         }
 
+        return response()->json($resp,200);
+    }
+
+    public function historic(){
+        $cashdesk = $this->http->input('idcash');
+        $view = $this->http->input('histview');
+
+        switch ($view['value']) {            
+            case 'm':
+                $rangedates = [
+                    $this->todayobj->startOfMonth()->format('Y-m-d H:i'),
+                    $this->todayobj->endOfMonth()->format('Y-m-d H:i')
+                ];
+            break;
+
+            case 'y':
+                $rangedates = [
+                    $this->todayobj->startOfYear()->format('Y-m-d H:i'),
+                    $this->todayobj->endOfYear()->format('Y-m-d H:i')
+                ];
+            break;
+
+            default:
+                $rangedates = [
+                    $this->todayobj->startOfWeek()->format('Y-m-d H:i'),
+                    $this->todayobj->endOfWeek()->format('Y-m-d H:i')
+                ];
+            break;
+        }
+
+        $openings = $this->cnx->table('cash_openings AS co')
+                    ->leftJoin('cash_cuts AS cu','co.id','=','cu._opening')
+                    ->select(
+                        'co.id as opening',
+                        'co.init as starts',
+                        'cu.cut_init as ends',
+                        'cu.id as cut'
+                    )
+                    ->whereBetween('co.init',$rangedates)
+                    ->where('co._cash',$cashdesk)
+                    ->orderBy('co.init','desc')
+                    ->get();
+        
+        $rows = $openings->map(function($instance){
+            $parkings = $this->cnx->table('parking')
+                        ->select('id','state')
+                        ->where('_opening',$instance->opening)
+                        ->get();
+
+            $instance->parkings=$parkings;
+            return $instance;
+        });
+        
+        // $transactions = $this->cnx->table('')->selectRaw('COUNT(*) as pksize');
+
+        $resp=[
+            "view"=>$view,
+            "cashdesk"=>$cashdesk,
+            "rangedates"=>$rangedates,
+            "openings"=>$rows
+        ];
         return response()->json($resp,200);
     }
 
