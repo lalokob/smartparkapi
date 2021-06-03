@@ -15,6 +15,7 @@ Carbon::setLocale('es');
 
 class CashdeskController extends Controller
 {
+
     public function __construct(Request $request){
         $this->http = $request;
         $this->todayobj = Carbon::now();
@@ -103,7 +104,7 @@ class CashdeskController extends Controller
             $parksclosed = collect($parksinopen)->filter(function($item,$key){
                 return $item->state==3;
             })->map(function($item,$key){
-                $item->totaltkt = $this->calcPay($item->init,36,$item->ends);
+                $item->totaltkt = $this->calcPay($item->init,30,$item->ends);
                 return $item;
             })->values()->all();
             // estacionamientos activos
@@ -228,7 +229,7 @@ class CashdeskController extends Controller
         return ["id"=>$idcut,"declaredsave"=>$denoms,"closedopening"=>$closeopen,"closedcash"=>$closecash];
     }
 
-    private function calcPay($init,$pricetime,$timend){
+    public function calcPay($init,$pricetime,$timend){
         $ends = $timend ? $timend : $this->todayobj;
         $timeinit = Carbon::parse($init);
         $total_minutes = $timeinit->diffInMinutes($ends);
@@ -594,6 +595,4 @@ class CashdeskController extends Controller
         ];
         return response()->json($resp,200);
     }
-
-    
 }

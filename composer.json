@@ -9,6 +9,7 @@
         "laravel/lumen-framework": "^7.0",
         "mike42/escpos-php": "^3.0",
         "nesbot/carbon": "^2.36",
+        "phpoffice/phpspreadsheet": "^1.17",
         "tymon/jwt-auth": "^1.0"
     },
     "require-dev": {

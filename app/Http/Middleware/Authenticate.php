@@ -20,10 +20,7 @@ class Authenticate
      * @param  \Illuminate\Contracts\Auth\Factory  $auth
      * @return void
      */
-    public function __construct(Auth $auth)
-    {
-        $this->auth = $auth;
-    }
+    public function __construct(Auth $auth){ $this->auth = $auth; }
 
     /**
      * Handle an incoming request.
@@ -33,11 +30,8 @@ class Authenticate
      * @param  string|null  $guard
      * @return mixed
      */
-    public function handle($request, Closure $next, $guard = null)
-    {
-        if ($this->auth->guard($guard)->guest()) {
-            return response('Navegacion no Disponible', 401);
-        }
+    public function handle($request, Closure $next, $guard = null){
+        if ($this->auth->guard($guard)->guest()) { return response('Navegacion no Disponible', 401); }
 
         return $next($request);
     }

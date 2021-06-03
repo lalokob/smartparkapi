@@ -44,8 +44,9 @@ class AccountController extends Controller
     public function tryLogin(){
         $nick = $this->http->input('nick');
         $pass = $this->http->input('pass');
-        
-        $account = DB::table('users')
+
+        try {
+            $account = DB::table('users')
                     ->join('roles_user','roles_user.id','=','users._rol')
                     ->select(
                         'users.id as id',
@@ -59,19 +60,20 @@ class AccountController extends Controller
                     )
                     ->where('nick',$nick)->first();
                     
-        if($account){
-            if(password_verify($pass, $account->pass)) {
-                $modules = $this->getModules($account->rolid);
-                $dtcrypt = json_encode([ "accid"=>$account->id,"rol"=>$account->rolid,"ends"=>$this->todayobj->endOfDay() ]);
-                $apikey = $this->genApiKey($dtcrypt);
-                $usdata = collect($account)->except(['pass']);
-                $rset = [ "msg"=>"Welcome!!!","apikey"=>$apikey,"usdata"=>$usdata,"modules"=>$modules,"dtcrypt"=>$dtcrypt ];
-            }else{ $rset = ["msg"=>"Credenciales Erroneas","apikey"=>null]; }
-        }else{ $rset = ["msg"=>"Credenciales Incorrectas","apikey"=>null]; }
+            if($account){
+                if(password_verify($pass, $account->pass)) {
+                    $modules = $this->getModules($account->rolid);
+                    $dtcrypt = json_encode([ "accid"=>$account->id,"rol"=>$account->rolid,"ends"=>$this->todayobj->endOfDay() ]);
+                    $apikey = $this->genApiKey($dtcrypt);
+                    $usdata = collect($account)->except(['pass']);
+                    $rset = [ "msg"=>"Welcome!!!","apikey"=>$apikey,"usdata"=>$usdata,"modules"=>$modules,"dtcrypt"=>$dtcrypt ];
+                }else{ $rset = ["msg"=>"Credenciales Erroneas","apikey"=>null]; }
+            }else{ $rset = ["msg"=>"Credenciales Incorrectas","apikey"=>null]; }
 
-        return response()->json([ "rset"=>$rset ], 200);
-        // return response()->json([ "rset"=>$this->http->all() ], 200);
-
+            return response()->json([ "rset"=>$rset ], 200);
+        } catch (\Exp $th) {
+            return response()->json([ "error"=>$th->getMessage() ]);
+        }
     }
 
     public function create(){

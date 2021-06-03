@@ -33,36 +33,26 @@ class ParkController extends Controller
         return ["park"=>$this->list(),"user"=>$iam];
     }
 
+    // private function get
+
     public function tesprinter(){
-        $connector = new NetworkPrintConnector(env("PRINTER_IP"), 9100);
-        $printer = new Printer($connector);
+        $ipprinter = $this->http->input('printer') ?: env("PRINTER_IP");
 
         try {
+            $connector = new NetworkPrintConnector($ipprinter,9100);
+            $printer = new Printer($connector);
+            $rsm = "conexion a $ipprinter exitosa\n";
+            
+            $printer -> feed(5);
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
             $printer -> setEmphasis(true);
-            $printer -> text("Estacionamiento\n");
-            $printer -> setEmphasis(false);
             $printer -> setTextSize(2, 1);
-            $printer -> text("Grupo Vizcarra\n");
+            $printer -> text($rsm);
             $printer -> setTextSize(1, 1);
-            $printer -> feed(1);
-            $printer -> text("Calle San Pablo #10\nColonia Centro, C.P. 06060\nTel. 55 2220 2120\n");
-            $printer -> feed(1);
-            $printer -> setEmphasis(true);
-            $printer -> text(" Comprobante de pago.\n");
-            $printer -> setEmphasis(false);
-            $printer -> setJustification(Printer::JUSTIFY_CENTER);
-            $printer -> feed(1);
-            $printer -> setEmphasis(true);
-            $printer -> text("¡¡Nos encanta servirte!!\n");
-
-            $printer -> feed(3);
+            $printer -> feed(5);
             $printer -> cut();
 
-            $rsm = "prueba completada con exito";
-        } catch (\Exception $e) {
-            $rsm = $e -> getMessage();
-        } finally {
+        } catch (\Exception $e) { $rsm = $e -> getMessage(); } finally {
             $printer -> close();
             return $rsm;
         }
@@ -311,7 +301,7 @@ class ParkController extends Controller
                 'parking._mainservice as idmainservice'
             )
             ->first();
-        $resumePay = $this->resumePay($dtplate->init,36);
+        $resumePay = $this->resumePay($dtplate->init,30);
 
         return ["dtpark"=>$dtplate,"topay"=>$resumePay];
     }
@@ -345,7 +335,7 @@ class ParkController extends Controller
         $printer = new Printer($connector);
 
         $dtpark = $this->dataforemmit($idpark);
-        $resume = $this->resumePay($dtpark->init,36,$dtpark->ends);
+        $resume = $this->resumePay($dtpark->init,30,$dtpark->ends);
 
         try {
             $printer -> setJustification(Printer::JUSTIFY_CENTER);
@@ -428,7 +418,7 @@ class ParkController extends Controller
     }
 
     private function operateSTD($partials,$init,$end){
-        $resumePay = $this->resumePay($init,36,$end);
+        $resumePay = $this->resumePay($init,30,$end);
         $resume = collect($resumePay)->only('hours','mints_adds');
 
         if(count($partials)==1){
@@ -485,7 +475,5 @@ class ParkController extends Controller
             "totalcost"=>$total_cost,
             "time_calc"=>$this->today
         ];
-    }
-
-    
+    }    
 }
