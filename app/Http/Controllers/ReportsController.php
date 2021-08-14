@@ -129,6 +129,7 @@ class ReportsController extends Controller
                     'parking._opening as apertura'
                 )
                 ->orderBy('parking.init','asc')
+                // ->limit(15000)
                 ->get()
             );
 
